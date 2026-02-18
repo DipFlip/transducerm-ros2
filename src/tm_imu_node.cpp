@@ -301,20 +301,37 @@ void TMSerial::FillCovarianceMatrices()
 
 void TMSerial::PublishTransform()
 {
-    // Publish imu_gravity → base_link transform using IMU orientation
-    // This gives us the robot's orientation relative to gravity (separate from SLAM world frame)
-    // FAST-LIVO2 controls "world" frame, this provides a gravity-aligned reference
+    // Publish imu_gravity → base_link using IMU orientation, compensated
+    // for the physical mounting rotation from the transform parameter.
+    //
+    // q_imu:   gravity-aligned frame → IMU body frame  (from sensor)
+    // q_mount: base_link → IMU body frame  (RPY in transform param)
+    // Result:  gravity-aligned frame → base_link = q_imu * q_mount⁻¹
+    auto params = this->get_parameter("transform").as_double_array();
+
+    tf2::Quaternion q_mount;
+    q_mount.setRPY(params[3], params[4], params[5]);
+
+    tf2::Quaternion q_imu(
+        imu_data_msg.orientation.x,
+        imu_data_msg.orientation.y,
+        imu_data_msg.orientation.z,
+        imu_data_msg.orientation.w);
+
+    tf2::Quaternion q_result = q_imu * q_mount.inverse();
+    q_result.normalize();
+
     geometry_msgs::msg::TransformStamped transform_;
     transform_.header.stamp = this->get_clock()->now();
-    transform_.header.frame_id = "imu_gravity";  // Renamed from "world" to avoid conflict with SLAM
+    transform_.header.frame_id = "imu_gravity";
     transform_.child_frame_id = this->get_parameter("parent_frame_id").as_string();
-    transform_.transform.translation.x = this->get_parameter("transform").as_double_array()[0];
-    transform_.transform.translation.y = this->get_parameter("transform").as_double_array()[1];
-    transform_.transform.translation.z = this->get_parameter("transform").as_double_array()[2];
-    transform_.transform.rotation.x = imu_data_msg.orientation.x;
-    transform_.transform.rotation.y = imu_data_msg.orientation.y;
-    transform_.transform.rotation.z = imu_data_msg.orientation.z;
-    transform_.transform.rotation.w = imu_data_msg.orientation.w;
+    transform_.transform.translation.x = 0.0;
+    transform_.transform.translation.y = 0.0;
+    transform_.transform.translation.z = 0.0;
+    transform_.transform.rotation.x = q_result.x();
+    transform_.transform.rotation.y = q_result.y();
+    transform_.transform.rotation.z = q_result.z();
+    transform_.transform.rotation.w = q_result.w();
     tf_broadcaster_->sendTransform(transform_);
 }
 

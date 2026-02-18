@@ -5,4 +5,4 @@ tm_imu_node:
     imu_frame_id : 'imu'
     parent_frame_id : 'base_link'
     timer_period : 5
-    transform : [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+    transform : [0.0, 0.0, 0.0, 1.5708, 0.0, 0.0]
